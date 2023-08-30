@@ -25,6 +25,7 @@ exports.generateToken= (id) => {
     return jwt.sign({userId: id}, 'secretKey');
 }
 
+const activeUsers = [];
 exports.login = async(req, res)=>{
     try{
         
@@ -40,11 +41,15 @@ exports.login = async(req, res)=>{
           if (!isValidPassword) {
             return res.status(400).json('Email or password is not correct');
           }
-      
+          activeUsers.push(user.name);
           // If everything is fine, generate a token and send the success response
           res.status(200).json({ message: 'Logged in successfully', token: exports.generateToken(user.id) });
 
     }catch(err){
         console.log(err);
     }
+}
+
+exports.activeUsers = async(req, res)=>{
+    res.status(200).json(activeUsers);
 }
