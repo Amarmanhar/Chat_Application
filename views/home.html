@@ -21,9 +21,7 @@
         <div class="leftSide">
              <!--  header section-->
            <div class="header">
-            <div class="userName">
-                <h4>You joined</h4>
-            </div>       
+                  
            </div>
              <!--chat list-->
              <div class="chatList">
@@ -33,68 +31,60 @@
 
         <div class="rightSide">
             <div class="header">
-               
-              <!-- icons at header section-->
-                <ul class="nav_icons">
-                  <li><ion-icon name="ellipsis-vertical-outline"></ion-icon></li>
-                </ul>
+                <h4 id="loggedInUserName">You joined</h4>
             </div>
+          
             <!-- chat box -->
             <div class="chatBox">
+                <div class="user-list">
+                    <!-- Active users will be displayed here -->
+                  </div>
                 <div class="message my_message">
-                    <p>hi<br><span>12:15</span></p>
+                   
                 </div>
                 <div class="message frnd_message">
-                    <p>hello<br><span>12:15</span></p>
+                    
                 </div>
             </div>
+
                <!-- footer section -->
             <div class="chatBox_input">
-                <ion-icon name="happy-outline"></ion-icon>
-                <ion-icon name="attach-outline"></ion-icon>
                 <input id="chat-message" type="text" placeholder="type a message">
                <ion-icon id="sendBtn" name="send-outline"></ion-icon>
             </div>
         </div>
     </div>
+    
     <script>
+           
+         async function updateActiveUsers() {
+    
+        const response = await axios.get('http://localhost:5000/add/get/active-users');
+        const activeUsersList = response.data;
 
-        window.addEventListener('load', async(event)=>{
-            event.preventDefault();
-            const response = await axios.get("http://localhost:5000/add/active-users");
-            if (Array.isArray(response.data)) {
-               console.log(response.data);
-               
-               const lastUser = response.data.pop();
-               const users = [...response.data];
-              
-               const Header = document.querySelector('.rightSide .header');
-               Header.innerHTML =`
-                        <div class="imgText">
-                            <h4>${lastUser}</h4>
-                        </div>
-               `;
+        // Find the elements for displaying the recently joined and previously joined users
+        const loggedInUserName = document.getElementById('loggedInUserName');
+        const userlistContainer = document.querySelector('.user-list');
 
-               users.forEach(element => {
-                  showOnLineUsers(element);
-               });
-                
-            } else {
-                console.log("The response data is not an array");
-            }
+        // Clear the user list
+        userlistContainer.innerHTML = '';
+
+        // Separate the recently joined and previously joined users
+        const recentlyJoinedUsers = activeUsersList.slice(0, 1); // Assuming the first user is the most recent
+        const previouslyJoinedUsers = activeUsersList.slice(0,-1); // The rest are previously joined
+
+        // Display the most recently joined user in the header
+        loggedInUserName.innerHTML = `welcome: ${activeUsersList[activeUsersList.length - 1]}`;
+
+        // Display the previously joined users below the header
+        previouslyJoinedUsers.forEach((user) => {
+            const userItem = document.createElement('div');
+            userItem.innerHTML =`<div>${user} :- joined</div>`;
+            userlistContainer.appendChild(userItem);
         });
-
-          const chatList = document.querySelector('.chatList');
-
-            function showOnLineUsers(element) {
-                const userBlock = document.createElement('div');
-                userBlock.classList.add('block'); // Add a class for styling if needed
-                userBlock.innerHTML = `
-               <div> <p>${element}</p></div>
-                <h4>Joined</h4>
-                `;
-                chatList.appendChild(userBlock);
-            }
+    } 
+    // setInterval(updateActiveUsers, 10000); 
+    updateActiveUsers();
 
             const sendBtn = document.querySelector('#sendBtn');
             sendBtn.addEventListener('click', async(event)=>{
@@ -106,6 +96,47 @@
 
                  console.log(response.data);
             })
+
+            window.addEventListener('load', async(event)=>{
+                event.preventDefault();
+                getMessages();
+                 setInterval(getMessages, 5000);
+               
+            })
+
+            async function getMessages() {
+            try {
+                    const response = await axios.get('http://localhost:5000/post-chat/get-chats');
+                    console.log(response.data);
+                    const messages = response.data;
+
+                    const messageContainer = document.querySelector('.frnd_message');
+                    messageContainer.innerHTML = '';
+                    messages.forEach((message) => {
+                        const frndMessageDiv = document.createElement('div');
+                        frndMessageDiv.classList.add('frnd_message');
+
+                       const messageItem = document.createElement('p');
+                       
+                       if (message.user && message.user.name) {
+                        messageItem.innerHTML = `
+                       <h4>${message.user.name}</h4>
+                        <p>${message.message}</p>
+                        `;
+                       
+                    } 
+                    frndMessageDiv.appendChild(messageItem);
+
+                   // Append the frndMessageDiv to the messageContainer
+                   messageContainer.appendChild(frndMessageDiv);
+                   
+                });
+               } catch (err) {
+                   console.error('Error fetching messages:', err);
+                }
+         }
+
+
     </script>
 </body>
 </html>
