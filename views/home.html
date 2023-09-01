@@ -97,19 +97,34 @@
                  console.log(response.data);
             })
 
-            window.addEventListener('load', async(event)=>{
-                event.preventDefault();
-                getMessages();
-                 setInterval(getMessages, 5000);
-               
-            })
+          // Define a function to fetch and update messages
+            async function fetchAndUpdateMessages() {
+                const lastMsgId = localStorage.getItem('lastMessageId') || 0;
+                const response = await axios.get(`http://localhost:5000/post-chat/get-chats/${lastMsgId}`);
+                const newMessages = response.data;
+                console.log(newMessages);
 
-            async function getMessages() {
+                if (newMessages.length > 0) {
+                    const latestMessageId = newMessages[newMessages.length - 1].id;
+                    localStorage.setItem('lastMessageId', latestMessageId);
+                }
+
+                // Update local storage with only new messages
+                let oldMessages = JSON.parse(localStorage.getItem('messages')) || [];
+                oldMessages = oldMessages.slice(-9); // Keep the last 9 messages, remove the older ones
+                const updatedMessages = [...oldMessages, ...newMessages];
+                localStorage.setItem('messages', JSON.stringify(updatedMessages));
+
+                // Display the messages
+                getMessages(updatedMessages);
+            }
+            fetchAndUpdateMessages();
+            setInterval(fetchAndUpdateMessages, 1000);
+
+
+            async function getMessages(messages) {
             try {
-                    const response = await axios.get('http://localhost:5000/post-chat/get-chats');
-                    console.log(response.data);
-                    const messages = response.data;
-
+                   
                     const messageContainer = document.querySelector('.frnd_message');
                     messageContainer.innerHTML = '';
                     messages.forEach((message) => {
@@ -126,10 +141,8 @@
                        
                     } 
                     frndMessageDiv.appendChild(messageItem);
-
-                   // Append the frndMessageDiv to the messageContainer
-                   messageContainer.appendChild(frndMessageDiv);
-                   
+                    // Append the frndMessageDiv to the messageContainer
+                    messageContainer.appendChild(frndMessageDiv); 
                 });
                } catch (err) {
                    console.error('Error fetching messages:', err);
