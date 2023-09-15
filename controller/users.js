@@ -1,4 +1,5 @@
 const Users = require('../models/users');
+const { Op } = require('sequelize');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
@@ -25,7 +26,8 @@ exports.generateToken= (id) => {
     return jwt.sign({userId: id}, 'secretKey');
 }
 
-const activeUsers = [];
+const activeUsers = new Set();
+
 exports.login = async(req, res)=>{
     try{
         
@@ -40,16 +42,39 @@ exports.login = async(req, res)=>{
       
           if (!isValidPassword) {
             return res.status(400).json('Email or password is not correct');
-          }
-          activeUsers.push(user.name);
-          // If everything is fine, generate a token and send the success response
-          res.status(200).json({ message: 'Logged in successfully', token: exports.generateToken(user.id) });
+          } 
+         
+          activeUsers.add(user.name);
+       
+          res.status(200).json({ message: 'Logged in successfully', token: exports.generateToken(user.id)});
 
     }catch(err){
         console.log(err);
     }
 }
 
-exports.activeUsers = async(req, res)=>{
-    res.status(200).json(activeUsers);
+exports.LoggedUser = async(req, res)=>{
+   try{
+      const user = await Users.findOne({where: {id:req.user.id}});
+      res.status(200).json({name: user.name});
+   }catch(err){
+    console.log(err);
+   }
+}
+
+exports.getUsers = async(req, res)=>{
+    try{
+        const userId = req.user.id;
+         const users = await Users.findAll({
+            attributes:['id', 'name'],
+            where: {
+                id: {
+                    [Op.not]: userId // Exclude the user with the given userId
+                }
+            }
+         });
+         res.status(200).json(users);
+    }catch(err){
+        console.log(err);
+    }
 }
