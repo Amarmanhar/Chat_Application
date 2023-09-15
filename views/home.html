@@ -11,7 +11,8 @@
     referrerpolicy="no-referrer"
   ></script>
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-<script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+   <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+   <script src="https://cdn.socket.io/4.6.0/socket.io.min.js" integrity="sha384-c79GN5VsunZvi+Q/WObgk2in0CbZsHnjEqvFxC5DxHn9lTfNce2WW6h2pH6u/kF+" crossorigin="anonymous"></script>
     <title>home page</title>
     
 </head>
@@ -19,9 +20,9 @@
     <div class="container">
        
         <div class="leftSide">
-             <!--  header section-->
            <div class="header">
-                  
+                  <button class="form-groups" id="make-groups">make group</button>
+                  <h4 id="user"></h4>
            </div>
              <!--chat list-->
              <div class="chatList">
@@ -29,21 +30,63 @@
              </div>
         </div>
 
+        <div id="myModal" class="modal">
+            <div class="modal-content">
+             <span class="close" id="closeModal">&times;</span>
+              <h2>Create a Group</h2>
+              <input type="text" id="groupName" placeholder="Enter group name">
+              <div id="selectedUsers">
+                 </div>
+              <div id="allUsers"></div>
+              <button id="addMemberBtn">Add Member</button>
+              <button id="createGroupBtn">Create</button> 
+            </div>
+          </div>
+
+          <div id="groupManagementModal" class="modal">
+            <div class="modal-content">
+                <span class="close" id="closeGroupManagementModal">&times;</span>
+                <h2>Group Management</h2>
+                <div id="groupMembersList"></div>
+                <div id="otherMembersList"></div>
+                <div id="manageGroupActions">
+                    <button id="addNewMembersBtn" >Add Members</button>
+                    <button id="removeMemberBtn" >Remove Member</button>
+                    <button id="promoteAdminBtn">Promote to Admin</button>
+                    
+                </div>
+            </div>
+        </div>
+
+        <div id="fileInput" class="file-input-container">
+            <span id="closeUploadModal" class="close">&times;</span>
+            
+        </div>
+
         <div class="rightSide">
             <div class="header">
-                <h4 id="loggedInUserName">You joined</h4>
-            </div>
-          
+                   <h4 id="selectedGroupName" style="position: relative;
+                                                   margin-left: 30px;
+                                                   cursor: pointer;
+                   ">Selected Group</h4>
+                
+                <button id="viewGroup" style="display: none;">View Group</button>
+              </div> 
             <!-- chat box -->
-            <div class="chatBox">
-                <div class="user-list">
-                    <!-- Active users will be displayed here -->
-                  </div>
-                <div class="message my_message">
-                   
+            <div class="chatBox">  
+                <div class="message my_message"> 
+                    <div>
+                        <a href="#" id="sendedfileLink" style="display: none;" target="_blank">Download File</a>
+                      </div>
                 </div>
-                <div class="message frnd_message">
-                    
+                <div>
+                    <span id="senderName" style="display: none;"></span>
+                    <a href="#" id="receivedfileLink" style="display: none;" target="_blank">Download File</a>
+                </div>
+                <div class="start">
+                    <h4>Select chats to start </h4>
+                </div>
+                <div class="message frnd_message">   
                 </div>
             </div>
 
@@ -51,104 +94,448 @@
             <div class="chatBox_input">
                 <input id="chat-message" type="text" placeholder="type a message">
                <ion-icon id="sendBtn" name="send-outline"></ion-icon>
+               <ion-icon id="upload" name="cloud-upload"></ion-icon>
             </div>
         </div>
     </div>
-    
+ 
     <script>
-           
-         async function updateActiveUsers() {
-    
-        const response = await axios.get('http://localhost:5000/add/get/active-users');
-        const activeUsersList = response.data;
 
-        // Find the elements for displaying the recently joined and previously joined users
-        const loggedInUserName = document.getElementById('loggedInUserName');
-        const userlistContainer = document.querySelector('.user-list');
+       const socket = io("http://localhost:5000");
 
-        // Clear the user list
-        userlistContainer.innerHTML = '';
-
-        // Separate the recently joined and previously joined users
-        const recentlyJoinedUsers = activeUsersList.slice(0, 1); // Assuming the first user is the most recent
-        const previouslyJoinedUsers = activeUsersList.slice(0,-1); // The rest are previously joined
-
-        // Display the most recently joined user in the header
-        loggedInUserName.innerHTML = `welcome: ${activeUsersList[activeUsersList.length - 1]}`;
-
-        // Display the previously joined users below the header
-        previouslyJoinedUsers.forEach((user) => {
-            const userItem = document.createElement('div');
-            userItem.innerHTML =`<div>${user} :- joined</div>`;
-            userlistContainer.appendChild(userItem);
+         //making the group
+         const makeGroup = document.querySelector('#make-groups');
+         const modal = document.querySelector('#myModal');
+         const closeModalBtn = document.querySelector('#closeModal');
+         const createGroupBtn = document.querySelector('#createGroupBtn');
+         const allUsersContainer = document.querySelector('#allUsers');
+         const selectedUsersContainer = document.querySelector('#selectedUsers');
+         const addMemberBtn = document.querySelector('#addMemberBtn');
+         const selectedUsers = new Set();
+     
+         makeGroup.addEventListener('click', async(event) =>{
+            event.preventDefault();
+            modal.style.display = 'block';
+            fetchAllUsers();
         });
-    } 
-    // setInterval(updateActiveUsers, 10000); 
-    updateActiveUsers();
+        
+        let username= null;
+        window.addEventListener('load', async(event)=>{
+            event.preventDefault();
+            const user = document.querySelector('#user');
 
-            const sendBtn = document.querySelector('#sendBtn');
-            sendBtn.addEventListener('click', async(event)=>{
+            const token = localStorage.getItem('token');
+            try {
+            const response = await axios.get('http://localhost:5000/add/get/logged-users', { headers: { "Authorization": token } });
 
-                 const message = document.querySelector('#chat-message').value;
-                 const token = localStorage.getItem('token');
-                 
-                 const response = await axios.post('http://localhost:5000/post-chat/chat',{message},{headers:{"Authorization": token}});
+            // Access the user's name from the response data
+            username = response.data.name;
+            user.textContent = `Welcome ${username}`;
+            } catch (err) {
+            console.log(err);
+            }
 
-                 console.log(response.data);
+            fetchAndDisplayGroups();
+        })
+
+        closeModalBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+        });
+        
+        addMemberBtn.addEventListener('click', () => {
+            selectedUsersContainer.innerHTML = '';
+            const checkboxes = document.querySelectorAll('#allUsers input[type="checkbox"]');
+            checkboxes.forEach((checkbox) => {
+                    const userId = checkbox.id;
+                    const userName = checkbox.nextElementSibling.textContent;
+
+                    if (checkbox.checked) {
+                    selectedUsers.add(userId);
+
+                    const userDiv = document.createElement('div');
+                    userDiv.innerHTML=`<div style="border-radius: 15px; padding: 5px; margin-bottom: 5px;
+                                        background:#b8b9b8;  width:25%;
+                                          ">
+                                         ${userName}
+                                     </div>`;
+                    selectedUsersContainer.appendChild(userDiv);
+                    } else {
+                       selectedUsers.delete(userId);
+                    }
+            });
+        });
+
+        createGroupBtn.addEventListener('click', async(event)=>{
+            event.preventDefault();
+            const groupName=document.getElementById("groupName").value;
+            const selectedUserIds = Array.from(selectedUsers);
+            try{
+                const token = localStorage.getItem('token');
+                const createdGroup = await axios.post('http://localhost:5000/group/create-group',{ groupName},{
+                    headers: { "Authorization": token }
+                });
+
+                const groupId = createdGroup.data.group.id;
+
+                await axios.post('http://localhost:5000/group/add-members',{ groupId, selectedUserIds },
+                                   { headers: { "Authorization": token } }
+                                );
+
+                console.log("Group created successfully.");
+                console.log("Members added successfully.");
+
+                modal.style.display = 'none';
+                fetchAndDisplayGroups();
+                
+            }catch(err){
+                console.log(err);
+            }
+        })
+
+        async function fetchAllUsers(){
+            try{
+                const token = localStorage.getItem('token');
+                const response =  await axios.get('http://localhost:5000/add/get-users',{headers: { "Authorization": token }});
+                const allUsers = response.data;
+                
+                allUsers.forEach((user)=>{
+                    const userDiv = document.createElement('div');
+                    userDiv.innerHTML =`
+                    <div>
+                        <input type="checkbox" id="${user.id}">
+                        <label>${user.name}</label>
+                       
+                    </div>
+                    `;
+                    allUsersContainer.appendChild(userDiv);
+                })
+
+            }catch(err){
+                console.log(err);
+            }
+        }
+    
+    let selectedGroupName = null;
+    async function fetchAndDisplayGroups(){
+        try{  
+          const token = localStorage.getItem('token');
+         const response = await axios.get('http://localhost:5000/group/get-groups',{headers: { "Authorization": token }}); 
+         const chatGroups = document.querySelector('.chatList');
+         chatGroups.innerHTML = '';
+     
+         response.data.forEach((group)=>{
+            const groupElement = document.createElement('div');
+            groupElement.classList.add('block');
+            groupElement.textContent = group.group_name;
+         
+            groupElement.addEventListener('click', async(event)=>{
+                event.preventDefault();
+                const selectedGroupName = document.getElementById("selectedGroupName");
+                selectedGroupName.textContent = group.group_name;
+                selectedGroupNames = group.group_name;
+                
+                const startDiv = document.querySelector('.start');
+                startDiv.style.display='none';
+              
+                const response = await axios.get(`http://localhost:5000/post-chat/get-chats/${selectedGroupNames}`)
+                const messages = response.data;
+                
+                // const messagesDiv = document.querySelector('.message');
+                //  messagesDiv.innerHTML='';
+
+                messages.forEach((message) => {
+                    if (message.name === username ) {
+                        
+                        DisplayMyMessage(message.message);
+
+                    } 
+                    if(message.name !== username &&  message.groupName === selectedGroupNames){   
+                       
+                     DisplayFrndMessages(message);    
+                    }
+                });
+
+                socket.emit('joinGroup', selectedGroupNames);
+                document.getElementById('viewGroup').style.display = 'block';
+                document.getElementById('viewGroup').setAttribute('data-group-name', group.group_name);
+               // fetchAndUpdateMessages(selectedGroupNames); 
+           });
+           
+           const viewGroupBtn = document.querySelector('#viewGroup');
+           viewGroupBtn.addEventListener('click', async(event)=>{
+               event.preventDefault();
+               openGroupManagementModal();
+               DisplayGroupMembers(selectedGroupNames);
+               DisplayOtherMembers(selectedGroupNames);
+
+           });
+
+           function openGroupManagementModal() {
+                const groupManagementModal = document.querySelector('#groupManagementModal');
+                groupManagementModal.style.display = 'block';
+          };
+
+          const closeGroupManagementModal = document.querySelector('#closeGroupManagementModal');
+          closeGroupManagementModal.addEventListener('click', (event)=>{
+            event.preventDefault();
+            const groupManagementModal = document.querySelector('#groupManagementModal');
+                groupManagementModal.style.display = 'none';
+          })
+
+         async function DisplayGroupMembers(selectedGroupNames){
+            try{
+                const response = await axios.get(`http://localhost:5000/group/get-members/${selectedGroupNames}`);
+                 const groupMembers = response.data;
+                const groupMembersList = document.querySelector('#groupMembersList');
+                groupMembersList.innerHTML = '';
+
+                groupMembers.forEach((member) => {
+                    const memberDiv = document.createElement('div');
+                    memberDiv.innerHTML = `
+                        <div>
+                            <input type="checkbox" id="${member.id}">
+                            <label>${member.user.name} (Admin: ${member.isAdmin ? 'Yes' : 'No'})</label>
+                        </div>
+                    `;
+                    groupMembersList.appendChild(memberDiv);
+                });
+            }catch(err){
+                console.log(err);
+            }
+          }
+
+         async function DisplayOtherMembers(selectedGroupNames){
+             try{
+                 const response = await axios.get(`http://localhost:5000/group/get-otherMembers/${selectedGroupNames}`);
+                 const otherUsers = response.data;
+                 console.log(otherUsers);
+                 const otherUsersList = document.querySelector('#otherMembersList');
+                 otherUsersList.innerHTML='';
+                 otherUsers.forEach((user)=>{
+                    const userDiv = document.createElement('div');
+                    userDiv.innerHTML=`
+                    <div>
+                        <input type="checkbox" id="${user.id}">
+                            <label>${user.name}</label>
+                        </div>
+                    `;
+                    otherUsersList.appendChild(userDiv);
+                 })
+             }catch(err){
+                console.log(err);
+             }
+         }
+          // add new members
+          const newMembers = new Set();
+          const addNewMembersBtn = document.querySelector('#addNewMembersBtn');
+          addNewMembersBtn.addEventListener('click', async(event)=>{
+            event.preventDefault();
+
+            const checkboxes = document.querySelectorAll('#otherMembersList input[type="checkbox"]');
+            checkboxes.forEach((checkbox)=>{
+                if(checkbox.checked){
+                    newMembers.add(checkbox.id);
+                }   
+            })
+            const newMembersIds = Array.from(newMembers);
+            const token = localStorage.getItem('token');
+            const response = await axios.post(`http://localhost:5000/group/add-newMembers/${selectedGroupNames}`,
+                           { newMembersIds},
+                           {headers: { "Authorization": token }}
+                         ); 
+            if(response.status === 200){
+                alert(response.data.message);
+            }else{
+                alert('only Admin can perform this action');
+            }
+
+          })
+          // remove members
+          const removeUser = new Set();
+          const removeBtn = document.querySelector('#removeMemberBtn');
+          removeBtn.addEventListener('click', async(event)=>{
+            event.preventDefault();
+            const checkboxes = document.querySelectorAll('#groupMembersList input[type="checkbox"]');
+            checkboxes.forEach((checkbox)=>{
+                if(checkbox.checked){
+                    removeUser.add(checkbox.id);
+                }   
             })
 
-          // Define a function to fetch and update messages
-            async function fetchAndUpdateMessages() {
-                const lastMsgId = localStorage.getItem('lastMessageId') || 0;
-                const response = await axios.get(`http://localhost:5000/post-chat/get-chats/${lastMsgId}`);
-                const newMessages = response.data;
-                console.log(newMessages);
+            const removeUserIds = Array.from(removeUser);
+            const token = localStorage.getItem('token');
+           
+            const response = await axios.delete(`http://localhost:5000/group/remove-Members/${selectedGroupNames}/${removeUserIds}`,
+            {headers: { "Authorization": token }});
 
-                if (newMessages.length > 0) {
-                    const latestMessageId = newMessages[newMessages.length - 1].id;
-                    localStorage.setItem('lastMessageId', latestMessageId);
-                }
-
-                // Update local storage with only new messages
-                let oldMessages = JSON.parse(localStorage.getItem('messages')) || [];
-                oldMessages = oldMessages.slice(-9); // Keep the last 9 messages, remove the older ones
-                const updatedMessages = [...oldMessages, ...newMessages];
-                localStorage.setItem('messages', JSON.stringify(updatedMessages));
-
-                // Display the messages
-                getMessages(updatedMessages);
+            if(response.status === 200){
+                alert(response.data.message);
+            }else{
+                alert('only Admin can perform this action');
             }
-            fetchAndUpdateMessages();
-            setInterval(fetchAndUpdateMessages, 1000);
+          })
 
+          // make Admin
+          const adminUser = new Set();
+          const adminBtn = document.querySelector('#promoteAdminBtn');
+          adminBtn.addEventListener('click', async(event)=>{
+               event.preventDefault();
+               const checkboxes = document.querySelectorAll('#groupMembersList input[type="checkbox"]');
+            checkboxes.forEach((checkbox)=>{
+                if(checkbox.checked){
+                    adminUser.add(checkbox.id);
+                }   
+            })
+            const adminUserIds = Array.from(adminUser);
+            const token = localStorage.getItem('token');
+            const response = await axios.put(`http://localhost:5000/group/make-admin/${selectedGroupNames}`,
+                                    {adminUserIds},
+                                    {headers: { "Authorization": token }}
+                                ); 
 
-            async function getMessages(messages) {
-            try {
-                   
-                    const messageContainer = document.querySelector('.frnd_message');
-                    messageContainer.innerHTML = '';
-                    messages.forEach((message) => {
-                        const frndMessageDiv = document.createElement('div');
-                        frndMessageDiv.classList.add('frnd_message');
-
-                       const messageItem = document.createElement('p');
-                       
-                       if (message.user && message.user.name) {
-                        messageItem.innerHTML = `
-                       <h4>${message.user.name}</h4>
-                        <p>${message.message}</p>
-                        `;
-                       
-                    } 
-                    frndMessageDiv.appendChild(messageItem);
-                    // Append the frndMessageDiv to the messageContainer
-                    messageContainer.appendChild(frndMessageDiv); 
-                });
-               } catch (err) {
-                   console.error('Error fetching messages:', err);
+                if(response.status === 200){
+                    alert(response.data.message);
+                }else{
+                    alert('only Admin can perform this action');
                 }
-         }
+          })
+         // sending message
+           const sendBtn = document.querySelector('#sendBtn');
+                sendBtn.addEventListener('click', async(event)=>{
+                    event.preventDefault();
+                const messageInput = document.querySelector('#chat-message');
+                const message = messageInput.value.trim();
+                if (message === '') {
+                    return;
+                }
+                const data={
+                    message,
+                    groupName:selectedGroupNames,
+                    name:username
+                }
+                console.log(data);
+                 
+               try{
+                 const token = localStorage.getItem('token');
+                 const response = await axios.post('http://localhost:5000/post-chat/chat',{data},{headers:{"Authorization": token}});
+                 console.log(response.data);  
+                 
+                socket.emit('chatMessage', data);
+                 messageInput.value = '';
+                 DisplayMyMessage(message);
 
+                 socket.on('message', (data)=>{
+                    if(data.name !== username){
+                        DisplayFrndMessages(data);
+                    }
+                    
+                 })
+
+               }catch(err){
+                console.log(err);
+               }           
+            })
+            //uploading files
+            const uploadBtn = document.querySelector('#upload');
+            uploadBtn.addEventListener('click', async(event)=>{
+                 
+                const fileInput= document.querySelector('#fileInput');
+                event.preventDefault();
+               fileInput.style.display='block';
+                const fileDiv= document.createElement('div');
+                fileDiv.innerHTML =`<form id="fileUploadForm" enctype="multipart/form-data">
+                                    <input type="file" id="fileUpload" name="file" accept="image/*, video/*, application/pdf">
+                                   <button id="sendFile">Send File</button>
+                                </form>`;
+                fileInput.appendChild(fileDiv);
+
+                const sendFileBtn =document.getElementById("sendFile");
+                sendFileBtn.addEventListener('click', async(event)=>{   
+                    event.preventDefault();
+                    const fileUploadForm = document.getElementById("fileUploadForm");
+                     const selectedFile = fileUpload.files[0];
+                     console.log(selectedFile);
+
+                     const formData = new FormData();
+                     formData.append("file", selectedFile);
+                    try{
+                        const response = await axios.post('http://localhost:5000/add/upload-files', formData,{
+                            headers: {
+                            'Content-Type': 'multipart/form-data', 
+                          },
+                        })
+                        const fileUrl = response.data.url;
+
+                        socket.emit('sendFile', {fileUrl, selectedGroupNames , username});
+
+                        const fileLink = document.getElementById('sendedfileLink');
+                        fileLink.href = fileUrl;
+                        fileLink.style.display = 'block';
+
+                        socket.on('fileReceived', (data)=>{
+                               if(data.username !== username){
+                                const { username, fileUrl, fileName } = data;
+                                const senderName = document.getElementById('senderName');
+                                const fileLink = document.getElementById('receivedfileLink');
+                                senderName.innerHTML = `<h4>${username} </h4>`;
+                                fileLink.href = fileUrl
+                                fileLink.style.display = 'block';
+                                senderName.style.display = 'block';   
+                               }
+                        })
+
+                    fileInput.style.display='none';
+                    }catch(err){
+                        console.log(err);
+                    }
+                })
+
+                const closeBtn = document.querySelector('#closeUploadModal');
+                const fileUpload= document.getElementById('fileUpload');
+                closeBtn.addEventListener('click', (event)=>{
+                    fileInput.style.display='none';
+                    fileDiv.innerHTML='';
+                    fileUpload.value='';
+                    
+                })
+            });
+                      
+            chatGroups.appendChild(groupElement);
+          })
+        }catch(err){
+            console.log(err);
+        }
+    }
+
+    function DisplayFrndMessages(message){
+            const messageContainer = document.querySelector('.frnd_message');
+            messageContainer.innerHTML='';
+                const frndMessageDiv = document.createElement('div');
+                frndMessageDiv.classList.add('frnd_message');
+                const messageItem = document.createElement('p');
+                    messageItem.innerHTML = `
+                        <h4>${message.name}</h4>
+                        <p>${message.message}</p>
+                    `;              
+                frndMessageDiv.appendChild(messageItem);
+                messageContainer.appendChild(frndMessageDiv);
+
+            };
+        
+    function DisplayMyMessage(message){
+        const messageContainer = document.querySelector('.my_message');
+              // messageContainer.innerHTML='';
+                const myMessageDiv = document.createElement('div');
+                myMessageDiv.classList.add('my_message');
+                const messageItem = document.createElement('p');
+                messageItem.innerHTML = `
+                        <h4>You</h4>
+                        <p>${message}</p>
+                    `;
+                    myMessageDiv.appendChild(messageItem);
+                    messageContainer.appendChild(myMessageDiv);
+
+    }
 
     </script>
 </body>
